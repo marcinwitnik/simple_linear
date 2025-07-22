@@ -12,7 +12,7 @@ Model oparty jest na sieci neuronowej z jedną warstwą gęstą i uczy się przy
 ## <img src="https://img.icons8.com/pastel-glyph/64/FFFFFF/code--v2.png" height="22px" /> Technologie i środowisko
 
 - **Język:** [![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org)
-- **IDE:** [![PyCharm](https://img.shields.io/badge/PyCharm-000000?style=flat&logo=pycharm&logoColor=white)](https://www.jetbrains.com/pycharm/)
+- **IDE:** [![PyCharm](https://img.shields.io/badge/PyCharm-009873?style=flat&logo=pycharm&logoColor=white)](https://www.jetbrains.com/pycharm/) 
 - **Biblioteki:**
   - [![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=flat&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/)  
     ➤ Budowa i trening modelu regresji liniowej
