@@ -82,7 +82,7 @@ docker compose down
 
 ---
 
-### 6. Zatrzymanie bazy Milvus razem z usunięciem danych
+### Zatrzymanie bazy Milvus razem z usunięciem danych
 
 ```bash
 docker compose down -v
@@ -94,7 +94,7 @@ docker compose down -v
 
 ---
 
-### 7. Sprawdzenie modeli Ollama
+### Sprawdzenie modeli Ollama
 
 ```bash
 ollama list
@@ -107,7 +107,7 @@ curl http://localhost:11434/api/tags
 
 ---
 
-### 8. Pobranie wymaganych modeli Ollama
+### Pobranie wymaganych modeli Ollama
 
 ```bash
 ollama pull gemma4:latest
@@ -120,7 +120,7 @@ ollama pull nomic-embed-text
 
 ---
 
-### 9. Dodanie nowego PDF do przetwarzania
+### Dodanie nowego PDF do przetwarzania
 
 ```bash
 cp "/ścieżka/do/nowego_pliku.pdf" "doc_sources/nowy_plik.pdf"
@@ -132,7 +132,7 @@ cp "/ścieżka/do/nowego_pliku.pdf" "doc_sources/nowy_plik.pdf"
 
 ---
 
-### 10. Przypisanie nowego PDF do typu i modelu maszyny
+### Przypisanie nowego PDF do typu i modelu maszyny
 
 ```bash
 nano src/index.py
@@ -152,7 +152,7 @@ MACHINE_ASSIGNMENTS: dict[str, tuple[str, str]] = {
 
 ---
 
-### 11. Standardowe indeksowanie dokumentów PDF
+### Standardowe indeksowanie dokumentów PDF
 
 ```bash
 python -m src.index doc_sources --drop
@@ -164,7 +164,7 @@ python -m src.index doc_sources --drop
 
 ---
 
-### 12. Indeksowanie z opisami rysunków, schematów i stron wizualnych
+### Indeksowanie z opisami rysunków, schematów i stron wizualnych
 
 ```bash
 python -m src.index doc_sources --drop --describe-images
@@ -176,7 +176,7 @@ python -m src.index doc_sources --drop --describe-images
 
 ---
 
-### 13. Indeksowanie tylko wybranych stron wizualnych
+### Indeksowanie tylko wybranych stron wizualnych
 
 ```bash
 python -m src.index doc_sources --drop --describe-images --visual-pages "3,5,10-12"
@@ -188,7 +188,7 @@ python -m src.index doc_sources --drop --describe-images --visual-pages "3,5,10-
 
 ---
 
-### 14. Indeksowanie z limitem stron wizualnych na dokument
+### Indeksowanie z limitem stron wizualnych na dokument
 
 ```bash
 python -m src.index doc_sources --drop --describe-images --max-visual-pages 10
@@ -212,7 +212,7 @@ python -m src.index doc_sources --drop --namespace CaseDoneDemo
 
 ---
 
-### 16. Uruchomienie interfejsu UI
+### Uruchomienie interfejsu UI
 
 ```bash
 python run_ui.py
@@ -230,7 +230,7 @@ http://127.0.0.1:7860
 
 ---
 
-### 17. Pełny start projektu po ponownym włączeniu komputera
+### Pełny start projektu po ponownym włączeniu komputera
 
 ```bash
 cd ~/Projekty/rag-multimodal
@@ -267,7 +267,7 @@ Poniższe komendy służą do technicznego sprawdzania danych zapisanych w Milvu
 
 ---
 
-### 19. Uniwersalny szablon do podglądu chunków
+### Uniwersalny szablon do podglądu chunków
 
 ```bash
 python - <<'PY'
@@ -836,6 +836,7 @@ for row in rows:
 PY
 ```
 </details>
+
 ---
 
 ## 2. Główne funkcje
