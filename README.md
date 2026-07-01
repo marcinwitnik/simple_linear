@@ -19,6 +19,824 @@ System umożliwia zadawanie pytań w języku naturalnym do wielu plików PDF. Do
 Projekt obsługuje nie tylko zwykły tekst, ale również tabele, procedury, dane techniczne, ostrzeżenia, rysunki, schematy i opisy wizualne stron PDF. Dzięki temu nadaje się do pracy z dokumentacją techniczną, instrukcjami obsługi, DTR, katalogami części, opisami układów oraz procedurami serwisowymi.
 
 ---
+<details>
+<summary><b>Komendy uruchomieniowe i administracyjne projektu</b></summary>
+
+## Uruchomienie, indeksowanie i obsługa projektu
+
+Poniższa sekcja zawiera najważniejsze komendy do pracy z projektem: uruchomienie środowiska, start bazy Milvus, indeksowanie PDF, uruchomienie UI oraz techniczne podglądanie chunków zapisanych w bazie.
+
+---
+
+### Wejście do projektu i aktywacja środowiska
+
+```bash
+cd ~/Projekty/rag-multimodal
+source .venv/bin/activate
+```
+
+**Co robi:** przechodzi do głównego katalogu projektu i aktywuje lokalne środowisko Python.
+
+**Po co:** wszystkie komendy projektu powinny być uruchamiane z aktywnym `.venv`, żeby korzystać z właściwych bibliotek i wersji zależności.
+
+---
+
+### Pierwsza instalacja środowiska od zera
+
+```bash
+cd ~/Projekty/rag-multimodal
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e .
+```
+
+**Co robi:** tworzy środowisko `.venv`, aktywuje je, aktualizuje `pip` i instaluje projekt razem z zależnościami z `pyproject.toml`.
+
+
+---
+
+### Uruchomienie bazy Milvus
+
+```bash
+cd ~/Projekty/rag-multimodal
+docker compose up -d
+```
+
+**Co robi:** uruchamia kontenery wymagane przez Milvus: `etcd`, `minio` i `milvus-standalone`.
+
+**Po co:** Milvus przechowuje chunki dokumentów, embeddingi dense, indeks sparse BM25 oraz metadane potrzebne do wyszukiwania.
+
+---
+
+
+### Zatrzymanie bazy Milvus
+
+```bash
+docker compose down
+```
+
+**Co robi:** zatrzymuje kontenery Milvus, MinIO i etcd.
+
+**Po co:** używane po zakończeniu pracy, gdy nie trzeba już trzymać bazy uruchomionej.
+
+---
+
+### 6. Zatrzymanie bazy Milvus razem z usunięciem danych
+
+```bash
+docker compose down -v
+```
+
+**Co robi:** zatrzymuje kontenery i usuwa wolumeny Dockera powiązane z bazą.
+
+**Po co:** używane tylko wtedy, gdy baza ma zostać wyczyszczona całkowicie. Po tej komendzie trzeba ponownie indeksować dokumenty.
+
+---
+
+### 7. Sprawdzenie modeli Ollama
+
+```bash
+ollama list
+curl http://localhost:11434/api/tags
+```
+
+**Co robi:** pokazuje lokalnie pobrane modele Ollama i sprawdza, czy API Ollama działa.
+
+**Po co:** projekt korzysta z Ollama do embeddingów, generowania odpowiedzi oraz opcjonalnego opisywania obrazów ze stron PDF.
+
+---
+
+### 8. Pobranie wymaganych modeli Ollama
+
+```bash
+ollama pull gemma4:latest
+ollama pull nomic-embed-text
+```
+
+**Co robi:** pobiera lokalny model tekstowo-wizyjny oraz model embeddingowy.
+
+**Po co:** `gemma4:latest` jest używany do generowania odpowiedzi i opisów wizualnych, a `nomic-embed-text` do tworzenia embeddingów dla Milvus.
+
+---
+
+### 9. Dodanie nowego PDF do przetwarzania
+
+```bash
+cp "/ścieżka/do/nowego_pliku.pdf" "doc_sources/nowy_plik.pdf"
+```
+
+**Co robi:** kopiuje nowy dokument PDF do folderu `doc_sources`.
+
+**Po co:** tylko pliki znajdujące się w `doc_sources` są domyślnie przetwarzane podczas indeksowania.
+
+---
+
+### 10. Przypisanie nowego PDF do typu i modelu maszyny
+
+```bash
+nano src/index.py
+```
+
+W pliku `src/index.py` należy uzupełnić słownik `MACHINE_ASSIGNMENTS`, na przykład:
+
+```python
+MACHINE_ASSIGNMENTS: dict[str, tuple[str, str]] = {
+    "nowy_plik.pdf": ("SWK", "SWK -177/L"),
+}
+```
+
+**Co robi:** przypisuje dokument do konkretnego typu maszyny i modelu.
+
+**Po co:** dzięki temu UI i RAG mogą filtrować wyniki po maszynie, np. `SWK`, `LK1`, `SWS` albo `WOS`.
+
+---
+
+### 11. Standardowe indeksowanie dokumentów PDF
+
+```bash
+python -m src.index doc_sources --drop
+```
+
+**Co robi:** przetwarza wszystkie PDF z `doc_sources`, tworzy chunki i zapisuje je w Milvus. Opcja `--drop` usuwa poprzednią kolekcję przed ponownym indeksowaniem.
+
+**Po co:** używane po pierwszym uruchomieniu projektu albo po zmianie dokumentów, konfiguracji lub przypisań maszyn.
+
+---
+
+### 12. Indeksowanie z opisami rysunków, schematów i stron wizualnych
+
+```bash
+python -m src.index doc_sources --drop --describe-images
+```
+
+**Co robi:** wykonuje pełne indeksowanie PDF i dodatkowo tworzy chunki `image_context` dla wybranych stron zawierających rysunki, schematy, widoki techniczne lub tabliczki.
+
+**Po co:** potrzebne, jeżeli system ma odpowiadać na pytania o obrazy, schematy, uchwyty, widoki, przepływy i elementy widoczne na stronach PDF.
+
+---
+
+### 13. Indeksowanie tylko wybranych stron wizualnych
+
+```bash
+python -m src.index doc_sources --drop --describe-images --visual-pages "3,5,10-12"
+```
+
+**Co robi:** wymusza opis wizualny tylko dla podanych stron.
+
+**Po co:** przydatne, gdy wiadomo dokładnie, które strony zawierają ważne rysunki lub schematy i nie ma potrzeby analizować wielu stron automatycznie.
+
+---
+
+### 14. Indeksowanie z limitem stron wizualnych na dokument
+
+```bash
+python -m src.index doc_sources --drop --describe-images --max-visual-pages 10
+```
+
+**Co robi:** ogranicza liczbę stron wizualnych analizowanych dla każdego PDF.
+
+**Po co:** przydatne, gdy indeksowanie z opisami obrazów trwa zbyt długo albo gdy model vision ma analizować tylko najlepsze strony.
+
+---
+
+### 15. Indeksowanie z wybranym namespace
+
+```bash
+python -m src.index doc_sources --drop --namespace CaseDoneDemo
+```
+
+**Co robi:** zapisuje chunki w określonej przestrzeni `namespace`.
+
+**Po co:** namespace pozwala logicznie oddzielać różne zestawy dokumentów w tej samej kolekcji Milvus.
+
+---
+
+### 16. Uruchomienie interfejsu UI
+
+```bash
+python run_ui.py
+```
+
+**Co robi:** uruchamia lokalny interfejs Gradio.
+
+**Po co:** przez UI można zadawać pytania do dokumentacji, wybierać typ i model maszyny oraz sprawdzać źródła odpowiedzi.
+
+Adres aplikacji:
+
+```text
+http://127.0.0.1:7860
+```
+
+---
+
+### 17. Pełny start projektu po ponownym włączeniu komputera
+
+```bash
+cd ~/Projekty/rag-multimodal
+source .venv/bin/activate
+docker compose up -d
+python run_ui.py
+```
+
+**Co robi:** aktywuje środowisko, uruchamia Milvus i startuje UI.
+
+**Po co:** to podstawowa komenda robocza na kolejne dni, gdy dokumenty są już zaindeksowane.
+
+---
+
+### Pełna przebudowa bazy po zmianie dokumentów
+
+```bash
+cd ~/Projekty/rag-multimodal
+source .venv/bin/activate
+docker compose up -d
+python -m src.index doc_sources --drop --describe-images
+python run_ui.py
+```
+
+**Co robi:** uruchamia bazę, usuwa starą kolekcję, indeksuje dokumenty od nowa i uruchamia UI.
+
+**Po co:** używane po dodaniu PDF, zmianie przypisań maszyn, zmianie konfiguracji indeksowania albo przebudowie logiki chunkowania.
+
+---
+
+## Podgląd i wywoływanie chunków z Milvus
+
+Poniższe komendy służą do technicznego sprawdzania danych zapisanych w Milvus. W każdej komendzie najłatwiej edytować zmienne `EXPR`, `LIMIT` i `FIELDS`.
+
+---
+
+### 19. Uniwersalny szablon do podglądu chunków
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+# Edytuj filtr EXPR zależnie od tego, jakie chunki chcesz zobaczyć.
+EXPR = f'namespace == "{NAMESPACE}"'
+
+# Edytuj limit, jeżeli chcesz pobrać więcej albo mniej chunków.
+LIMIT = 10
+
+# Edytuj pola, jeżeli chcesz zobaczyć inne metadane.
+FIELDS = [
+    "text",
+    "file_name",
+    "page_no",
+    "chunk_id",
+    "namespace",
+    "machine_type",
+    "machine_model",
+    "section",
+    "content_type",
+    "has_image",
+    "has_table",
+    "is_procedure",
+    "is_noise",
+]
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=EXPR,
+    output_fields=FIELDS,
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print("PLIK:", row.get("file_name"))
+    print("STRONA:", row.get("page_no"))
+    print("CHUNK:", row.get("chunk_id"))
+    print("TYP:", row.get("content_type"))
+    print("MASZYNA:", row.get("machine_type"), row.get("machine_model"))
+    print("SEKCJA:", row.get("section"))
+    print()
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki z kolekcji Milvus zgodnie z filtrem `EXPR` i drukuje ich treść razem z metadanymi.
+
+**Po co:** to główny szablon do sprawdzania, co realnie zostało zapisane w bazie.
+
+---
+
+### Chunki tylko z konkretnego typu treści
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+# Dostępne przykłady content_type: text, table, procedure, image, mixed, image_context.
+CONTENT_TYPE = "image_context"
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and content_type == "{CONTENT_TYPE}"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "section", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "|", row.get("content_type"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki o wybranym `content_type`.
+
+**Po co:** pozwala osobno sprawdzić np. opisy wizualne `image_context`, tabele `table` albo procedury `procedure`.
+
+---
+
+### Chunki tylko dla konkretnego typu maszyny
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+MACHINE_TYPE = "SWK"
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and machine_type == "{MACHINE_TYPE}"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("machine_type"), row.get("machine_model"), "|", row.get("file_name"), "| strona", row.get("page_no"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki przypisane do wybranego typu maszyny.
+
+**Po co:** pozwala sprawdzić, czy filtrowanie po typie maszyny działa zgodnie z przypisaniami w `MACHINE_ASSIGNMENTS`.
+
+---
+
+### Chunki tylko dla konkretnego modelu maszyny
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+MACHINE_TYPE = "SWK"
+MACHINE_MODEL = "SWK -226/L"
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and machine_type == "{MACHINE_TYPE}" and machine_model == "{MACHINE_MODEL}"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("machine_type"), row.get("machine_model"), "|", row.get("file_name"), "| strona", row.get("page_no"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki tylko dla konkretnego modelu maszyny.
+
+**Po co:** pozwala sprawdzić, co dokładnie widzi RAG po wybraniu danego modelu w UI.
+
+---
+
+### Chunki tylko z konkretnego pliku PDF
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+FILE_NAME = "10. Most 113.pdf"
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and file_name == "{FILE_NAME}"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "section", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "| chunk", row.get("chunk_id"), "|", row.get("content_type"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki tylko z jednego dokumentu PDF.
+
+**Po co:** przydatne do sprawdzania, czy konkretny plik został poprawnie zaindeksowany.
+
+---
+
+### Chunki z konkretnej strony PDF
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+FILE_NAME = "17.HOLOWANIE.pdf"
+PAGE_NO = 3
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and file_name == "{FILE_NAME}" and page_no == {PAGE_NO}',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "section", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "| chunk", row.get("chunk_id"), "|", row.get("content_type"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki z konkretnej strony konkretnego pliku.
+
+**Po co:** przydatne przy sprawdzaniu, czy dana tabela, procedura albo rysunek ze strony PDF trafił do bazy.
+
+---
+
+### Chunki zawierające tabele
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and has_table == 1',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "section", "content_type", "has_table"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "|", row.get("section"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki oznaczone flagą `has_table == 1`.
+
+**Po co:** pozwala kontrolować, czy tabele zostały wykryte i zapisane jako dane przydatne dla zapytań tabelarycznych.
+
+---
+
+### Chunki zawierające procedury
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and is_procedure == 1',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "section", "content_type", "is_procedure"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "|", row.get("section"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki oznaczone flagą `is_procedure == 1`.
+
+**Po co:** pozwala sprawdzić, które fragmenty system traktuje jako procedury, instrukcje lub kroki działania.
+
+---
+
+### Chunki zawierające obrazy lub opisy wizualne
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and has_image == 1',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "section", "content_type", "has_image"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "|", row.get("content_type"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki oznaczone jako zawierające obraz lub opis wizualny.
+
+**Po co:** pozwala sprawdzić, czy strony ze schematami i rysunkami zostały poprawnie oznaczone.
+
+---
+
+### Chunki zawierające konkretną frazę w tekście
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+
+PHRASE = "HAP"
+LIMIT = 10
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and text like "%{PHRASE}%"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "section", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), "| strona", row.get("page_no"), "|", row.get("content_type"))
+    print((row.get("text") or "")[:3000])
+PY
+```
+
+**Co robi:** pobiera chunki, których pole `text` zawiera wybraną frazę.
+
+**Po co:** przydatne do sprawdzania, czy konkretne pojęcie, numer, skrót, jednostka albo nazwa elementu trafiła do bazy.
+
+---
+
+### Sprawdzenie liczby rekordów w kolekcji
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+print(collection.num_entities)
+PY
+```
+
+**Co robi:** pokazuje liczbę rekordów zapisanych w kolekcji Milvus.
+
+**Po co:** pozwala szybko sprawdzić, czy indeksowanie faktycznie dodało chunki do bazy.
+
+---
+
+### Sprawdzenie schematu kolekcji Milvus
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+
+print(collection.schema)
+PY
+```
+
+**Co robi:** wyświetla strukturę kolekcji, pola wektorowe oraz pola metadanych.
+
+**Po co:** przydatne przy debugowaniu zapytań do Milvus i sprawdzaniu, jakie pola można filtrować.
+
+---
+
+## Wizualizacja bazy wektorowej
+
+### Utworzenie podstawowej wizualizacji wektorów
+
+```bash
+python vector_store_visualization.py
+```
+
+**Co robi:** pobiera wektory dense z Milvus, redukuje je do 2D i zapisuje obraz `vector_store_visualization.png`.
+
+**Po co:** pozwala zobaczyć rozkład chunków w przestrzeni embeddingów.
+
+---
+
+### Wizualizacja kolorowana według modelu maszyny
+
+```bash
+python vector_store_visualization.py --color-by machine_model
+```
+
+**Co robi:** tworzy wykres, w którym punkty są kolorowane według pola `machine_model`.
+
+**Po co:** pozwala zobaczyć, jak chunki grupują się względem modeli maszyn.
+
+---
+
+### Wizualizacja kolorowana według typu treści
+
+```bash
+python vector_store_visualization.py --color-by content_type
+```
+
+**Co robi:** tworzy wykres, w którym punkty są kolorowane według typu treści, np. `text`, `table`, `procedure`, `image_context`.
+
+**Po co:** pozwala sprawdzić, czy różne typy treści układają się w oddzielne lub częściowo wspólne grupy semantyczne.
+
+---
+
+### Wizualizacja tylko dla wybranego typu maszyny
+
+```bash
+python vector_store_visualization.py --expr 'machine_type == "SWK"'
+```
+
+**Co robi:** tworzy wizualizację tylko dla chunków spełniających podany filtr Milvus.
+
+**Po co:** pozwala analizować osobno fragmenty przypisane do jednej maszyny lub grupy dokumentów.
+
+---
+
+## Najkrótsza lista komend roboczych
+
+### Start projektu, gdy baza jest już zaindeksowana
+
+```bash
+cd ~/Projekty/rag-multimodal
+source .venv/bin/activate
+docker compose up -d
+python run_ui.py
+```
+
+### Dodanie PDF i przebudowa bazy
+
+```bash
+cd ~/Projekty/rag-multimodal
+source .venv/bin/activate
+cp "/ścieżka/do/nowego_pliku.pdf" "doc_sources/nowy_plik.pdf"
+nano src/index.py
+python -m src.index doc_sources --drop --describe-images
+python run_ui.py
+```
+
+### Podgląd chunków po typie treści
+
+```bash
+python - <<'PY'
+from pymilvus import connections, db, Collection
+from src.config import config
+
+URI = config.get("database", "uri", default="http://localhost:19530")
+DB_NAME = config.get("database", "name", default="rag_multimodal")
+COLLECTION_NAME = config.get("database", "collection_name", default="collection_universal")
+NAMESPACE = config.get("database", "namespace", default="CaseDoneDemo")
+CONTENT_TYPE = "image_context"
+LIMIT = 5
+
+connections.connect(alias="default", uri=URI)
+db.using_database(DB_NAME)
+collection = Collection(COLLECTION_NAME)
+collection.load()
+
+rows = collection.query(
+    expr=f'namespace == "{NAMESPACE}" and content_type == "{CONTENT_TYPE}"',
+    output_fields=["text", "file_name", "page_no", "chunk_id", "machine_type", "machine_model", "content_type"],
+    limit=LIMIT,
+)
+
+for row in rows:
+    print("=" * 100)
+    print(row.get("file_name"), row.get("page_no"), row.get("machine_type"), row.get("machine_model"), row.get("content_type"))
+    print((row.get("text") or "")[:2500])
+PY
+```
+</details>
+---
 
 ## 2. Główne funkcje
 
@@ -142,8 +960,7 @@ RAG-MULTIMODAL/
 │   ├── milvus_store.py
 │   └── rag.py
 │
-├── video/
-│   └── materiały demonstracyjne / nagrania projektu
+│
 │
 ├── volumes/
 │   └── dane kontenerów Milvus, MinIO i etcd
@@ -1196,21 +2013,3 @@ logi
 Folder `doc_sources/` zależy od polityki projektu. Jeżeli dokumentacja jest poufna lub firmowa, nie powinna trafiać do publicznego repozytorium.
 
 ---
-
-## 25. Podsumowanie
-
-Projekt jest lokalnym multimodalnym systemem RAG dla dokumentacji technicznej PDF.
-
-Najważniejsze elementy projektu:
-
-```text
-Docling odpowiada za odczyt i OCR dokumentów.
-Index.py przygotowuje chunki i metadane.
-Ollama generuje embeddingi, opisy wizualne i odpowiedzi.
-Milvus przechowuje dense/sparse vectors oraz metadane.
-Rag.py odpowiada za logikę wyszukiwania i ranking.
-Run_ui.py udostępnia gotowy interfejs Gradio.
-Vector_store_visualization.py pozwala zobaczyć rozkład wektorów.
-```
-
-System został zaprojektowany tak, aby można było zadawać pytania techniczne do dokumentacji maszyn i otrzymywać konkretne odpowiedzi z podaniem źródeł.
