@@ -20,7 +20,7 @@ Projekt obsługuje nie tylko zwykły tekst, ale również tabele, procedury, dan
 
 ---
 <details>
-<summary><b>Komendy uruchomieniowe i administracyjne projektu</b></summary>
+<summary><h2>Komendy uruchomieniowe i administracyjne projektu</h2></summary>
 
 ## Uruchomienie, indeksowanie i obsługa projektu
 
