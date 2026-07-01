@@ -837,7 +837,6 @@ PY
 ```
 </details>
 
----
 
 ## 2. Główne funkcje
 
